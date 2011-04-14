@@ -4,8 +4,10 @@ Masters of C# is a programming tournament framework. It is based on the Masters 
 
 ## Techniques
   * Entity Framework
-  * ASP.NET MVC 2
+  * <del>ASP.NET MVC 2
+  * ASP.NET MVC 3
   * jQuery UI
+  * _new UI theme_
 
 ## Prerequisites
   * NUnit 2.5.2.9222
