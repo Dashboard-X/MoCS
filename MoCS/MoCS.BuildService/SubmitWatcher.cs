@@ -26,22 +26,38 @@ namespace MoCS.BuildService
 
         public SubmitWatcher()
         {
-            //create a synchronized wrapper around the hashtable
-            Hashtable ht2 = new Hashtable();
-            _runningSubmitsHT = Hashtable.Synchronized(ht2);
+            Hashtable ht2 = CreateSynchronizedWrappedHashtable();
             _systemSettings = SettingsFactory.CreateSystemSettings();
             _fileSystem = new MoCS.BuildService.Business.FileSystemWrapper();
+        }
+
+        private Hashtable CreateSynchronizedWrappedHashtable()
+        {
+            Hashtable ht2 = new Hashtable();
+            _runningSubmitsHT = Hashtable.Synchronized(ht2);
+            return ht2;
         }
 
         public void StartWatching()
         {
             ClientFacade facade = new ClientFacade();
             List<Submit> submits = facade.GetUnprocessedSubmits();
+            StartWatchingNewSubmits(submits);
 
-            //start watching new submits
-            StartNewSubmits(submits);
+            StartPolling();
+        }
 
-            //set the timer to start periodically watching
+        private void _timer_Elapsed(object sender, ElapsedEventArgs e)
+        {
+            ClientFacade facade = new ClientFacade();
+            List<Submit> submits = facade.GetUnprocessedSubmits();
+            StartWatchingNewSubmits(submits);
+            TerminateOldSubmits();
+            TraceStatus();
+        }
+
+        private void StartPolling()
+        {
             _timer = new System.Timers.Timer();
             _timer.Interval = GetPollingInterval();
             _timer.Elapsed += new ElapsedEventHandler(_timer_Elapsed);
@@ -57,16 +73,7 @@ namespace MoCS.BuildService
 
         }
 
-        private void _timer_Elapsed(object sender, ElapsedEventArgs e)
-        {
-            ClientFacade facade = new ClientFacade();
-            List<Submit> submits = facade.GetUnprocessedSubmits();
-            StartNewSubmits(submits);
-            TerminateOldSubmits();
-            TraceStatus();
-        }
-
-        private void StartNewSubmits(List<Submit> submits)
+        private void StartWatchingNewSubmits(List<Submit> submits)
         {
             int millisecondsToWait = GetTimeOut();
 
@@ -98,7 +105,6 @@ namespace MoCS.BuildService
             return millisecondsToWait;
         }
 
-
         private void TerminateOldSubmits()
         {
             int timeOut = GetTimeOut();
@@ -108,35 +114,23 @@ namespace MoCS.BuildService
             //see if any thread has timed out
             foreach (string key in _runningSubmitsHT.Keys)
             {
-                bool terminate = false;
                 Thread t = ((ValidationProcess)_runningSubmitsHT[key]).Thread;
-                ValidationProcess submit = null;
-                bool isTimeOut = false;
+                ValidationProcess validationProcess = null;
 
-                submit = (ValidationProcess)_runningSubmitsHT[key];
-
-                if (submit.Result != null && submit.Result.Status != SubmitStatusCode.Unknown)
+                validationProcess = (ValidationProcess)_runningSubmitsHT[key];
+                
+                bool terminate = validationProcess.IsReady();
+               
+                if(!terminate)
                 {
-                    terminate = true;
-                }
-                else
-                {
-                    TimeSpan span = DateTime.Now.Subtract(submit.ProcessingDate);
-
-                    if (span.TotalMilliseconds > timeOut)
+                    terminate = validationProcess.CheckForTimeOut(DateTime.Now, timeOut);
+                    if(terminate)
                     {
-                        isTimeOut = true;
-                        terminate = true;
-                        if (submit.Result == null)
-                        {
-                            submit.Result = new ValidationResult();
-                        }
-                        submit.Result.Status = SubmitStatusCode.TestError;
-                        submit.Result.Messages.Add("TimeOut - it took more than " + timeOut.ToString() + " ms");
+                        validationProcess.SaveStatusToDatabase();
                     }
                 }
 
-                if (terminate)
+                if(terminate)
                 {
                     //remind wich key to delete. this can't be done inside the enumeration
                     keysToDelete.Add(key);
@@ -145,17 +139,10 @@ namespace MoCS.BuildService
                     t.Abort();
 
                     //terminate running processes
-                    if (submit.Validator != null)
+                    if (validationProcess.Validator != null)
                     {
-                        submit.Validator.Terminate();
+                        validationProcess.Validator.Terminate();
                     }
-
-                    if (isTimeOut)
-                    {
-                        //other statusses are saved in the process
-                        SaveStatusToDatabase(submit.Submit, submit.Result);
-                    }
-
                 }
             }
 
@@ -170,7 +157,6 @@ namespace MoCS.BuildService
             }
 
         }
-
 
         public void BuildSolution(object vp)
         {
@@ -191,7 +177,6 @@ namespace MoCS.BuildService
             }
         }
 
-
         private void TraceStatus()
         {
             Console.WriteLine(DateTime.Now.ToLongTimeString() + "  submits: " + _runningSubmitsHT.Count.ToString());
@@ -202,201 +187,11 @@ namespace MoCS.BuildService
             Console.WriteLine(DateTime.Now.ToLongTimeString() + " " + message);
         }
 
-        private static string CreateTeamDirectory(SystemSettings sysSettings, string teamName, Assignment assignment)
-        {
-            MoCS.BuildService.Business.FileSystemWrapper fileSystem = new Business.FileSystemWrapper();
-
-            string resultBasePath = ConfigurationManager.AppSettings["ResultBasePath"];
-            if (!resultBasePath.EndsWith(@"\"))
-            {
-                resultBasePath += @"\";
-            }
-
-
-            //prepare processing
-            //create a new directory for the basepath
-            fileSystem.CreateDirectoryIfNotExists(resultBasePath);
-
-            //create a directory for the assignment
-            fileSystem.CreateDirectoryIfNotExists(resultBasePath + assignment.Name);
-
-            string teamDirName = teamName + "_" + DateTime.Now.ToString("ddMMyyyy_HHmmss");
-            string teamSubmitDirName = resultBasePath + assignment.Name + @"\" + teamDirName;
-            //create a new directory for the teamsubmit
-            fileSystem.CreateDirectory(teamSubmitDirName);
-
-            return teamSubmitDirName;
-        }
-
-        private static void CopyFiles(Assignment assignment, Submit submit, string teamSubmitDirName, SystemSettings systemSettings)
-        {
-
-
-            MoCS.BuildService.Business.FileSystemWrapper fileSystem = new Business.FileSystemWrapper();
-            
-            // Copy nunit.framework.dll to this directory
-            fileSystem.FileCopy(Path.Combine(systemSettings.NunitAssemblyPath, "nunit.framework.dll"),
-                        Path.Combine(teamSubmitDirName, "nunit.framework.dll"), true);
-
-            //copy the file to this directory
-            using (Stream target = fileSystem.FileOpenWrite(Path.Combine(teamSubmitDirName, submit.FileName)))
-            {
-                try
-                {
-                    target.Write(submit.Data, 0, submit.Data.Length);
-                }
-                finally
-                {
-                    target.Flush();
-                }
-            }
-
-
-            // Copy the interface file
-            //delete the file if it existed already
-            AssignmentFile interfaceFile = assignment.AssignmentFiles.Find(af => af.Name == "InterfaceFile");
-
-            fileSystem.DeleteFileIfExists(Path.Combine(teamSubmitDirName, interfaceFile.FileName));
-
-            fileSystem.FileCopy(Path.Combine(assignment.Path, interfaceFile.FileName),
-                        Path.Combine(teamSubmitDirName, interfaceFile.FileName));
-
-            //copy the server testfile
-            //delete the file if it existed already
-            AssignmentFile serverTestFile = assignment.AssignmentFiles.Find(af => af.Name == "NunitTestFileServer");
-
-            fileSystem.DeleteFileIfExists(Path.Combine(teamSubmitDirName, serverTestFile.FileName));
-
-            fileSystem.FileCopy(Path.Combine(assignment.Path, serverTestFile.FileName),
-                        Path.Combine(teamSubmitDirName, serverTestFile.FileName));
-
-            //copy additional serverfiles
-            List<AssignmentFile> serverFilesToCopy = assignment.AssignmentFiles.FindAll(af => af.Name == "ServerFileToCopy");
-            foreach (AssignmentFile serverFileToCopy in serverFilesToCopy)
-            {
-
-                fileSystem.DeleteFileIfExists(Path.Combine(teamSubmitDirName, serverFileToCopy.FileName));
-
-                fileSystem.FileCopy(Path.Combine(assignment.Path, serverFileToCopy.FileName),
-                            Path.Combine(teamSubmitDirName, serverFileToCopy.FileName));
-            }
-
-            //copy the client testfile
-            AssignmentFile clientTestFile = assignment.AssignmentFiles.Find(af => af.Name == "NunitTestFileClient");
-
-            //delete the file if it existed already
-            fileSystem.DeleteFileIfExists(Path.Combine(teamSubmitDirName, clientTestFile.FileName));
-
-            fileSystem.FileCopy(Path.Combine(assignment.Path, clientTestFile.FileName),
-                        Path.Combine(teamSubmitDirName, clientTestFile.FileName));
-
-        }
-
-        private static void CleanupFiles(string teamSubmitDirName)
-        {
-            MoCS.BuildService.Business.FileSystemWrapper fileSystem = new Business.FileSystemWrapper();
-            fileSystem.FileDelete(Path.Combine(teamSubmitDirName, "nunit.framework.dll"));
-        }
-
         private static void ProcessTeamSubmit(ValidationProcess validationProcess, SystemSettings sysSettings)
         {
-            Submit submit = validationProcess.Submit;
-            string teamName = submit.Team.Name;
-            string assignmentName = submit.TournamentAssignment.Assignment.Name;
-
-            Log(string.Format("Processing teamsubmit {0} for assignment {1}", teamName, assignmentName));
-
-            //create the processor
-            SubmitValidator validator = new SubmitValidator(new MoCS.BuildService.Business.FileSystemWrapper(), new ExecuteCmd());
-            validationProcess.SetProcessor(validator);
-
-            //prepare directory and files for processing
-            string teamSubmitDirName = CreateTeamDirectory(sysSettings, teamName, submit.TournamentAssignment.Assignment);
-            ClientFacade facade = new ClientFacade();
-            MoCS.Business.Objects.Assignment assignment = facade.GetAssignmentById(submit.TournamentAssignment.Assignment.Id, true);
-            CopyFiles(assignment, submit, teamSubmitDirName, sysSettings);
-
-            //START PROCESSING
-
-            //settings that are read from the assignment
-            AssignmentSettings assignmentSettings = SettingsFactory.CreateAssignmentSettings(assignment, assignmentName);
-            //settings that are from the submitprocess/team submit
-            SubmitSettings submitSettings = SettingsFactory.CreateSubmitSettings(teamName, teamSubmitDirName, assignmentName);
-
-            //set status of submit to 'processing'
-            facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.Processing, "This submitted is currently processed.", DateTime.Now);
-
-            ValidationResult result = validator.Process(sysSettings, assignmentSettings, submitSettings);
-            validationProcess.Result = result;
-
-            Log(result.Status + " for " + submit.Team.Name + " on " + submit.TournamentAssignment.Assignment.Name);
-
-            //save the new status to the database
-            SaveStatusToDatabase(validationProcess.Submit, result);
-
-            // Delete nunit.framework.dll from the submit dir to keep things clean
-            CleanupFiles(teamSubmitDirName);
+            validationProcess.PrepareProcessing(sysSettings);
+            validationProcess.Process(sysSettings);
+            validationProcess.FinishProcessing();
         }
-
-
-
-        private static void SaveStatusToDatabase(Submit submit, ValidationResult result)
-        {
-            string teamName = submit.Team.Name;
-            string assignmentName = submit.TournamentAssignment.Assignment.Name;
-
-            string details = "";
-            foreach (string detail in result.Messages)
-            {
-                details += detail;
-            }
-            if (details.Length > 1000)
-            {
-                details = details.Substring(0, 999);
-            }
-
-            ClientFacade facade = new ClientFacade();
-
-            //process result
-            switch (result.Status)
-            {
-                case SubmitStatusCode.Unknown:
-                    facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.ErrorUnknown, details, DateTime.Now);
-                    break;
-                case SubmitStatusCode.CompilationError:
-                    facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.ErrorCompilation, details, DateTime.Now);
-                    break;
-                case SubmitStatusCode.ValidationError:
-                    facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.ErrorValidation, details, DateTime.Now);
-                    break;
-                case SubmitStatusCode.TestError:
-                    facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.ErrorTesting, details, DateTime.Now);
-                    break;
-                case SubmitStatusCode.ServerError:
-                    facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.ErrorServer, details, DateTime.Now);
-                    break;
-                case SubmitStatusCode.Success:
-                    facade.UpdateSubmitStatusDetails(submit.Id, SubmitStatus.Success, details, DateTime.Now);
-                    break;
-                default:
-                    break;
-            }
-
-
-        }
-
-
-
-
-
-
-
-
-
     }
-
-
-
-
-
 }

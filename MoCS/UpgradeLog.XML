@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type='text/xsl' href='_UpgradeReport_Files/UpgradeReport.xslt'?><UpgradeLog>
+<Properties><Property Name="Solution" Value="MoCS">
+</Property><Property Name="Solution File" Value="C:\Users\a137271\Projects\MoCS\MoCS\MoCS.sln">
+</Property><Property Name="Date" Value="donderdag 5 april 2012">
+</Property><Property Name="Time" Value="13:58:21">
+</Property></Properties><Event ErrorLevel="0" Project="MoCS.BuildService.Business.Tests" Source="MoCS.BuildService.Business.Tests\MoCS.BuildService.Business.Tests.csproj" Description="Project converted successfully">
+</Event><Event ErrorLevel="3" Project="MoCS.BuildService.Business.Tests" Source="MoCS.BuildService.Business.Tests\MoCS.BuildService.Business.Tests.csproj" Description="Converted">
+</Event><Event ErrorLevel="0" Project="MoCS.BuildService.Business.Tests" Source="MoCS.BuildService.Business.Tests\MoCS.BuildService.Business.Tests.csproj" Description="Scan complete: Upgrade not required for project files.">
+</Event></UpgradeLog>

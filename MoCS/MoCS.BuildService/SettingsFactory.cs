@@ -12,32 +12,41 @@ namespace MoCS.BuildService
     {
         public static SystemSettings CreateSystemSettings()
         {
-            //settings that are used on server side
             SystemSettings sysSettings = new SystemSettings();
 
             string cscPath = ConfigurationManager.AppSettings["CscPath"];
             string nunitAssemblyPath = ConfigurationManager.AppSettings["NunitAssemblyPath"];
             string nunitConsolePath = ConfigurationManager.AppSettings["NunitConsolePath"];
 
-            //no final slash allowed on nunitPath
-            if (nunitAssemblyPath.EndsWith(@"\"))
-            {
-                nunitAssemblyPath = nunitAssemblyPath.Substring(0, nunitAssemblyPath.Length - 1);
-            }
-
-            //no final slash allowed on nunitPath
-            if (nunitConsolePath.EndsWith(@"\"))
-            {
-                nunitConsolePath = nunitConsolePath.Substring(0, nunitAssemblyPath.Length - 1);
-            }
-
+            nunitAssemblyPath = RemoveTrailingSlashFromPath(nunitAssemblyPath);
+            nunitConsolePath = RemoveTrailingSlashFromPath(nunitConsolePath);
+         
             sysSettings.CscPath = cscPath;
             sysSettings.NunitAssemblyPath = nunitAssemblyPath;
             sysSettings.NunitConsolePath = nunitConsolePath;
             sysSettings.NunitTimeOut = int.Parse(ConfigurationManager.AppSettings["ProcessingTimeOut"]);
 
             sysSettings.AssignmentsBasePath = ConfigurationManager.AppSettings["AssignmentBasePath"];
+
+            sysSettings.BaseResultPath = ConfigurationManager.AppSettings["ResultBasePath"];
+            if (!sysSettings.BaseResultPath.EndsWith(@"\"))
+            {
+                sysSettings.BaseResultPath += @"\";
+            }
+
             return sysSettings;
+        }
+
+        public static string RemoveTrailingSlashFromPath(string path)
+        {
+            if (path == null)
+                return null;
+
+            if (path.EndsWith(@"\"))
+            {
+                path = path.Substring(0, path.Length - 1);
+            }
+            return path;
         }
 
         public static SubmitSettings CreateSubmitSettings(string teamName, string teamSubmitDirName, string assignmentId)

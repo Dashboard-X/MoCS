@@ -130,6 +130,8 @@ namespace MoCS.BuildService.Business
         }
 
 
+
+
         private ValidationResult CompileAssembly(string buildFilePath, string outputLogPath)
         {
 

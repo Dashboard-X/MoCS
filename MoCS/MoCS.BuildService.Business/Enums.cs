@@ -6,14 +6,15 @@ using System.Text;
 namespace MoCS.BuildService.Business
 {
 
-        public enum SubmitStatusCode
-        {
-            Unknown,
-            CompilationError,
-            ValidationError,
-            TestError,
-            ServerError,
-            Success
-        }
+    public enum SubmitStatusCode
+    {
+        Unknown,
+        CompilationError,
+        ValidationError,
+        TestError,
+        ServerError,
+        Success,
+        TimeOut
+    }
 
 }

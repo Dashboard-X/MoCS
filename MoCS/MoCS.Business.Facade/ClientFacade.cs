@@ -1,22 +1,19 @@
-﻿using System.Collections.Generic;
-using System.IO;
-using System;
-using System.Xml;
-using System.Linq;
-using MoCS.Data;
-using MoCS.Business.Objects;
+﻿using System;
+using System.Collections.Generic;
 using System.Configuration;
-using MoCS.Business.Objects.Interfaces;
+using System.IO;
+using System.Linq;
 using System.Text;
-using MoCS.Business.Facade.MoCSServiceReference;
 using System.Threading;
+using MoCS.Business.Facade.MoCSServiceReference;
+using MoCS.Business.Objects;
+using MoCS.Business.Objects.Interfaces;
 
 namespace MoCS.Business.Facade
 {
     public class ClientFacade
     {
         private IDataAccess _dataAccess;
-
         private IFileSystem _fileSystem;
         private string _assignmentsBasePath;
         private bool _useNotification;
@@ -83,29 +80,7 @@ namespace MoCS.Business.Facade
             }
         }
 
-        ///// <summary>
-        ///// Initializes a new instance of the <see cref="ClientFacade"/> class.
-        ///// DataAccess is injected.
-        ///// </summary>
-        ///// <param name="dataAccess">The data access.</param>
-        ///// <param name="assignmentsBasePath">The assignments base path.</param>
-        //public ClientFacade(IDataAccess dataAccess, string assignmentsBasePath)
-        //{
-        //    _dataAccess = dataAccess;
-        //    _fileSystem = new FileSystemWrapper();
-        //    _assignmentsBasePath = assignmentsBasePath;
-        //}
-
-        ///// <summary>
-        ///// Constructor for unit testing purposes
-        ///// </summary>
-        ///// <param name="dataAccess"></param>
-        ///// <param name="fileSystem"></param>
-        //public ClientFacade(IDataAccess dataAccess, IFileSystem fileSystem)
-        //{
-        //    _dataAccess = dataAccess;
-        //    _fileSystem = fileSystem;
-        //}
+     
 
         #endregion
 
@@ -300,13 +275,6 @@ namespace MoCS.Business.Facade
                     result.Assignment = FacadeHelpers.FillAssignmentDetailsFromXml(result.Assignment, _fileSystem, includeServerFiles);
                 }
 
-                //result.Assignment.AssignmentFiles
-                //result.Assignment.Author
-                //result.Assignment.Category
-                //result.Assignment.Difficulty = 
-                //result.Assignment.ClassNameToImplement = 
-                //result.Assignment.InterfaceNameToImplement = 
-                //result.Assignment.Version = 
             }
 
             return result;
