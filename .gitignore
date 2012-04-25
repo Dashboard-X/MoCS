@@ -1,5 +1,6 @@
 *.suo
 *.user
+*.vsmdi
 bin
 obj
 Debug
